@@ -34,10 +34,10 @@ nox_2020 <- rOstluft::resample(nox_2020, "mean", "h1")
 sites <- levels(nox_2020$site)
 historic_years <- 2015:2019
 
-# s <- rOstluft::store_aqmet()
-# data_historic <- s$get(site = sites, year = historic_years, interval = "h1")
+s <- rOstluft::store_aqmet_public()
+data_historic <- s$get(site = sites, year = historic_years, interval = "h1")
 # saveRDS(data_historic, "daten_2015-2019.rds")
-data_historic <- readRDS("daten_2015-2019.rds")
+# data_historic <- readRDS("daten_2015-2019.rds")
 
 nox_historic <- rOstluft::pluck_parameter(data_historic, "NOx")
 
@@ -45,32 +45,37 @@ nox_historic <- rOstluft::pluck_parameter(data_historic, "NOx")
 nox <- rOstluft::bind_rows_with_factor_columns(nox_historic, nox_2020)
 
 # filtere die Daten für jedes Jahr. Starte mit dem Montag am nächsten zum 9.3
-start <- lubridate::ymd("2020-03-09", tz = "Etc/GMT-1")
+origin <- lubridate::ymd("2020-03-09", tz = "Etc/GMT-1")
 end <- lubridate::floor_date(lubridate::now("Etc/GMT-1"), "day")
-duration <- lubridate::as.period(end - start)
-start_day <- format(start, "%m-%d")
+duration <- lubridate::as.period(end - origin)
+
+
+# Hilfsunktion sucht das nächste Datum mit dem gleichen Wochentag wie der Ursprung im gesuchten Jahr
+align_year_on_weekday_offset <- function(origin, target_year) {
+  origin <- lubridate::as_date(origin)
+  origin_wday <- lubridate::wday(origin)
+  target <- lubridate::`year<-`(origin, target_year)
+  target_wday <- lubridate::wday(target)
+  offset <- ((origin_wday - target_wday + 3) %% 7) - 3
+  offset
+}
 
 years <- c(historic_years, 2020)
-starts <- rep(start, times = length(years))
-
-# Vermutlich gibt es einen einfacheren weg
-all_years <- tibble::tibble( year = years, start = starts)
-all_years <- dplyr::mutate(all_years, start = purrr::map2(.data$start, .data$year, ~ lubridate::`year<-`(.x, .y)))
-all_years <- tidyr::unnest(all_years, cols = c("start"))
+all_years <- tibble::tibble( year = years)
 
 all_years <- dplyr::mutate(all_years,
-  weekday = lubridate::wday(.data$start, week_start = 1),
-  offset = dplyr::if_else(.data$weekday <= 4, 1 - .data$weekday, 8 - .data$weekday),
-  start_day = .data$start + lubridate::days(offset),
-  end_day = .data$start_day + duration
+  start = lubridate::`year<-`(origin, .data$year),
+  offset = align_year_on_weekday_offset(origin, .data$year),
+  start_day = .data$start + lubridate::days(.data$offset),  
+  end_day = .data$start_day + duration,
+  
+  # Kontrolle
+  weekday = lubridate::wday(.data$start_day, week_start = 1, label = TRUE, abbr = FALSE)
 )
 
 # pull die Vektoren, dann können wir den alten Code verwenden
 start_days <- rlang::set_names(dplyr::pull(all_years, "start_day"), years)
 end_days <- rlang::set_names(dplyr::pull(all_years, "end_day"), years)
-
-start_days <- format(start_days, "%Y-%m-%d")
-end_days <- format(end_days, "%Y-%m-%d")
 
 # NSE zur Erstellung einer Filter Expression für jeden Zeitraum für jedes jahr
 create_filter_quo <- function(start_date, end_date) {

@@ -28,10 +28,11 @@ nox_2020 <- rOstluft::read_airmo_webexport("http://ogd.zueriluft.ch/api/v1/ol_no
 # historische NOx Daten vom s3 aqmet store für 2015 bis 2019
 sites <- levels(nox_2020$site)
 historic_years <- 2015:2019
-# s <- rOstluft::store_aqmet()
-# data_historic <- s$get(site = sites, year = historic_years, interval = "h1")
+
+s <- rOstluft::store_aqmet_public()
+data_historic <- s$get(site = sites, year = historic_years, interval = "h1")
 # saveRDS(data_historic, "daten_2015-2019.rds")
-data_historic <- readRDS("daten_2015-2019.rds")
+# data_historic <- readRDS("daten_2015-2019.rds")
 
 nox_historic <- rOstluft::pluck_parameter(data_historic, "NOx")
 
