@@ -20,11 +20,17 @@ library(scales)
 library(glue)
 library(tibble)
 library(tidyr)
+library(httr)
+library(ggplot2)
+
 
 
 
 # aktuelle NOx Daten vom Webexport
-nox_2020 <- rOstluft::read_airmo_webexport("http://ogd.zueriluft.ch/api/v1/ol_nox_covid19_2020.csv")
+# STZH proxy blockt readr download, benütze httr mit globaler proxy konfiguration
+
+resp <- httr::GET("http://ogd.zueriluft.ch/api/v1/ol_nox_covid19_2020.csv")
+nox_2020 <- rOstluft::read_airmo_webexport(httr::content(resp, as = "raw"))
 nox_2020 <- rOstluft::pluck_parameter(nox_2020, "NOx")
 
 # h1 oder min30 Daten nutzen? gemeinsame basis für praktisch alle Daten wäre h1
@@ -112,7 +118,7 @@ nox_filtered <- dplyr::left_join(nox_filtered, offset_years, by = "year")
 # factorize Jahr damit es diskret ist und nicht kontinuerlich (für ggplot scales)
 nox_graph <- dplyr::mutate(nox_filtered,
   x = lubridate::`year<-`(.data$starttime, 2020) - .data$offset,
-  size = dplyr::if_else(.data$year == 2020, 0.75, 0.5),
+  size = dplyr::if_else(.data$year == 2020, 0.6, 0.5),
   year = as.factor(.data$year)
 )
 
@@ -126,7 +132,7 @@ legend_labels <- glue::glue_data(all_years, '{year}: {format(start_day, "%d.%m")
 
 plt <- ggplot(nox_graph, aes(x = .data$x, y = .data$value, color = .data$year, size = .data$size)) +
   labs(
-    title = "Meteorologische Variabilität von NOx über verschiedene Jahre (Wochentag adustiert)",
+    title = "Meteorologische Variabilität von NOx über verschiedene Jahre (Wochentag adjustiert)",
     x = "Datum für Jahr 2020",
     y = "NOx [ppb]"
   ) +
@@ -138,7 +144,7 @@ plt <- ggplot(nox_graph, aes(x = .data$x, y = .data$value, color = .data$year, s
     guide = guide_legend(title = "Jahr", nrow = 1, override.aes = list(size = 2))
   ) +
   scale_x_datetime(
-    date_breaks = "1 day",
+    date_breaks = "2 day",
     expand = expansion(mult = 0.01),
     date_labels = "%d %b"
   ) +
